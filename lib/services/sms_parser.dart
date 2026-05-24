@@ -1,6 +1,7 @@
 import 'package:sms_finance_app/enums/transcation_type_enum.dart';
 import 'package:sms_finance_app/logger/logger.dart';
 import 'package:sms_finance_app/models/transaction_model.dart';
+import 'package:uuid/uuid.dart';
 
 import '../enums/category_enum.dart';
 
@@ -13,6 +14,9 @@ class SMSParser {
     CategoryEnum category = CategoryEnum.other;
     DateTime dateTime = DateTime.now();
 
+    // ============ generating unique id ===========
+    final uuid = Uuid();
+
     // ============ Extracting price/amount ============
     final doubleRegEx = RegExp(r'(?<=LKR\s+)([\d,]+\.\d{1,2})');
     final RegExpMatch? doubleMatch = doubleRegEx.firstMatch(sms);
@@ -23,11 +27,19 @@ class SMSParser {
     // ============ Decide expense or income also merchant data ============
     if (sms.toLowerCase().contains("credited")) {
       txEnum = TransactionTypeEnum.income;
+      appLogger.e("credited : $txEnum\n $sms");
 
       // Extracting merchant/place prevent to credited regex
-      final merchantRegEx = RegExp(r'(?<=TODO\s+)[A-Z\s]+(?<=\s\d+)');
+      final merchantRegEx = RegExp(
+        r'credited\s+to\s+AC\s+\*\*\d+\s+from\s+(.+?)\s+\d{2}/',
+      );
+      print("###@@@ $merchantRegEx");
       final RegExpMatch? merchantMatch = merchantRegEx.firstMatch(sms);
+
+      print("### merchantMatch is nul $merchantMatch");
+
       if (merchantMatch != null) {
+        print("###merchantMatch : ${merchantMatch.group(1).toString().trim()}");
         merchantMatchStr = merchantMatch.group(1).toString().trim();
       }
     }
@@ -44,11 +56,10 @@ class SMSParser {
     }
 
     // ============ category detector ============
-    if(merchantMatchStr.isNotEmpty){
+    if (merchantMatchStr.isNotEmpty) {
       category = detectCategory(merchantMatchStr);
       appLogger.d(category);
     }
-
 
     // ============ Extract date time ============
     final dateRegEx = RegExp(r'\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}');
@@ -56,7 +67,6 @@ class SMSParser {
 
     // since sms date format != dart date time format conv
     if (dateMatch != null) {
-
       final rawDate = dateMatch.group(0)!;
       appLogger.d(rawDate);
 
@@ -83,15 +93,15 @@ class SMSParser {
     if (amount != 0.0 &&
         txEnum != TransactionTypeEnum.notDefined &&
         merchantMatchStr.isNotEmpty) {
-
       // model obj
       TransactionModel model = TransactionModel(
-        id: "id",
+        id: uuid.v4(),
         amount: amount,
-        type: TransactionTypeEnum.expense,
+        type: txEnum,
         merchant: merchantMatchStr,
         category: category,
         dateTime: dateTime,
+        rawMessage: sms,
       );
       return model;
     }
